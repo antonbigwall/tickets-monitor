@@ -2,6 +2,7 @@ import requests
 import re
 import os
 import sys
+import time
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -26,25 +27,17 @@ if r.status_code != 200:
 
 text = r.text.lower()
 
-# Выводим контекст вокруг ключевых слов для диагностики
-for kw in ['распроданы', 'входные билеты', 'soldout']:
-    idx = text.find(kw)
-    if idx >= 0:
-        print(f"НАЙДЕНО '{kw}' на позиции {idx}:")
-        print(repr(text[max(0,idx-150):idx+150]))
-    else:
-        print(f"НЕ НАЙДЕНО: '{kw}'")
-
-# Проверка: билеты распроданы если "распроданы" встречается раньше "входные билеты"
 idx_sold = text.find('распроданы')
 idx_tickets = text.find('входные билеты')
 
-print(f"\nПозиция 'распроданы': {idx_sold}")
-print(f"Позиция 'входные билеты': {idx_tickets}")
-print(f"Разница: {idx_tickets - idx_sold if idx_sold >= 0 and idx_tickets >= 0 else 'N/A'}")
+print(f"'распроданы': {idx_sold}, 'входные билеты': {idx_tickets}")
 
-if idx_sold >= 0 and idx_tickets >= 0 and idx_tickets > idx_sold:
+if idx_sold >= 0 and idx_tickets > idx_sold:
     print("Билеты РАСПРОДАНЫ — молчим")
+    sys.exit(0)
+
+if 'архстояние' not in text:
+    print("Страница загрузилась некорректно — пропускаем")
     sys.exit(0)
 
 print("БИЛЕТЫ ПОЯВИЛИСЬ — отправляем уведомление!")
@@ -55,4 +48,4 @@ for _ in range(3):
         "👉 <a href='https://kids.stoyanie.ru/tickets'>КУПИТЬ БИЛЕТ</a>\n\n"
         "Не медли — раскупают быстро!"
     )
-    import time; time.sleep(5)
+    time.sleep(5)
