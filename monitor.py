@@ -1,71 +1,57 @@
 import requests
-import time
-import os
 import re
+import os
+import sys
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8870056110:AAF5zT-mLKG1E6pQRSZnGf3M0SzlJwUxxvc")
-CHAT_ID = os.environ.get("CHAT_ID", "394491586")
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 URL = "https://kids.stoyanie.ru/tickets"
-CHECK_INTERVAL = 300  # 5 минут
 
 def send_telegram(msg):
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"},
-            timeout=10
-        )
-    except Exception as e:
-        print(f"Ошибка отправки в Telegram: {e}")
-
-def check_tickets():
-    try:
-        r = requests.get(URL, timeout=20, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        })
-        text = r.text.lower()
-
-        # Ищем паттерн: "распроданы" а потом в пределах 300 символов "входные билеты"
-        # Это означает что входные билеты распроданы
-        pattern = r'распроданы.{0,300}входные\s*билеты'
-        match = re.search(pattern, text, re.DOTALL)
-
-        if match:
-            print("Входные билеты распроданы — всё ок")
-            return False
-        else:
-            print("Паттерн 'распроданы -> входные билеты' не найден — билеты могли появиться!")
-            return True
-
-    except Exception as e:
-        print(f"Ошибка проверки страницы: {e}")
-        return False
-
-def main():
-    print("Мониторинг запущен (v3)...")
-    send_telegram(
-        "✅ <b>Мониторинг билетов запущен (v3)!</b>\n\n"
-        "Проверяю каждые 5 минут:\n"
-        "https://kids.stoyanie.ru/tickets\n\n"
-        "Как только появятся входные билеты — сразу напишу 🎟"
+    requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"},
+        timeout=10
     )
 
-    while True:
-        available = check_tickets()
-        if available:
-            print("БИЛЕТЫ ПОЯВИЛИСЬ! Отправляю уведомление...")
-            for _ in range(3):
-                send_telegram(
-                    "🚨🎟 <b>БИЛЕТЫ ПОЯВИЛИСЬ!</b> 🎟🚨\n\n"
-                    "Входные билеты на Архстояние Детское доступны прямо сейчас!\n\n"
-                    "👉 <a href='https://kids.stoyanie.ru/tickets'>КУПИТЬ БИЛЕТ</a>\n\n"
-                    "Не медли — раскупают быстро!"
-                )
-                time.sleep(5)
-            time.sleep(CHECK_INTERVAL)
-        else:
-            print(f"Билетов нет. Следующая проверка через {CHECK_INTERVAL // 60} мин.")
-            time.sleep(CHECK_INTERVAL)
+def check_tickets():
+    r = requests.get(URL, timeout=20, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ru-RU,ru;q=0.9",
+    })
+    
+    print(f"Status: {r.status_code}, Length: {len(r.text)}")
+    
+    if r.status_code != 200:
+        print(f"Ошибка: статус {r.status_code}")
+        sys.exit(0)  # не шлём уведомление при ошибке
 
-if __name__ == "__main__":
-    main()
+    text = r.text.lower()
+    
+    # Точная проверка: ищем "распроданы" и сразу после (в пределах 500 символов) "входные билеты"
+    # Это означает что входные билеты распроданы
+    match = re.search(r'распроданы.{0,500}входные\s+билеты', text, re.DOTALL)
+    
+    if match:
+        print("Входные билеты РАСПРОДАНЫ — всё спокойно")
+        return False
+    
+    # Дополнительная проверка: если страница вообще загрузилась нормально
+    # (есть ключевые слова сайта) но паттерна нет — значит билеты появились
+    if "архстояние" not in text:
+        print("Страница загрузилась некорректно — пропускаем")
+        sys.exit(0)
+    
+    print("Паттерн не найден — БИЛЕТЫ ПОЯВИЛИСЬ!")
+    return True
+
+if check_tickets():
+    for _ in range(3):
+        send_telegram(
+            "🚨🎟 <b>БИЛЕТЫ ПОЯВИЛИСЬ!</b> 🎟🚨\n\n"
+            "Входные билеты на Архстояние Детское доступны прямо сейчас!\n\n"
+            "👉 <a href='https://kids.stoyanie.ru/tickets'>КУПИТЬ БИЛЕТ</a>\n\n"
+            "Не медли — раскупают быстро!"
+        )
+        import time; time.sleep(5)
