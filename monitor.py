@@ -1,6 +1,7 @@
 import requests
 import time
 import os
+import re
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8870056110:AAF5zT-mLKG1E6pQRSZnGf3M0SzlJwUxxvc")
 CHAT_ID = os.environ.get("CHAT_ID", "394491586")
@@ -24,32 +25,26 @@ def check_tickets():
         })
         text = r.text.lower()
 
-        # На странице структура такая: сначала "распроданы", потом "входные билеты"
-        # Ищем оба индекса
-        idx_sold = text.find("распроданы")
-        idx_tickets = text.find("входные билеты")
+        # Ищем паттерн: "распроданы" а потом в пределах 300 символов "входные билеты"
+        # Это означает что входные билеты распроданы
+        pattern = r'распроданы.{0,300}входные\s*билеты'
+        match = re.search(pattern, text, re.DOTALL)
 
-        if idx_sold == -1 or idx_tickets == -1:
-            print("Не удалось найти нужные блоки на странице")
-            return False
-
-        # Если "входные билеты" идут ПОСЛЕ "распроданы" и в пределах 500 символов — они распроданы
-        if idx_tickets > idx_sold and (idx_tickets - idx_sold) < 500:
+        if match:
             print("Входные билеты распроданы — всё ок")
             return False
-
-        # Иначе — билеты появились!
-        print("БИЛЕТЫ ПОЯВИЛИСЬ!")
-        return True
+        else:
+            print("Паттерн 'распроданы -> входные билеты' не найден — билеты могли появиться!")
+            return True
 
     except Exception as e:
         print(f"Ошибка проверки страницы: {e}")
         return False
 
 def main():
-    print("Мониторинг запущен...")
+    print("Мониторинг запущен (v3)...")
     send_telegram(
-        "✅ <b>Мониторинг билетов запущен!</b>\n\n"
+        "✅ <b>Мониторинг билетов запущен (v3)!</b>\n\n"
         "Проверяю каждые 5 минут:\n"
         "https://kids.stoyanie.ru/tickets\n\n"
         "Как только появятся входные билеты — сразу напишу 🎟"
@@ -59,7 +54,6 @@ def main():
         available = check_tickets()
         if available:
             print("БИЛЕТЫ ПОЯВИЛИСЬ! Отправляю уведомление...")
-            # Отправляем несколько раз чтобы точно дошло
             for _ in range(3):
                 send_telegram(
                     "🚨🎟 <b>БИЛЕТЫ ПОЯВИЛИСЬ!</b> 🎟🚨\n\n"
@@ -68,7 +62,6 @@ def main():
                     "Не медли — раскупают быстро!"
                 )
                 time.sleep(5)
-            # После уведомления продолжаем мониторить
             time.sleep(CHECK_INTERVAL)
         else:
             print(f"Билетов нет. Следующая проверка через {CHECK_INTERVAL // 60} мин.")
