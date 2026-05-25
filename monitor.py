@@ -1,12 +1,12 @@
 import requests
-import re
+import hashlib
 import os
 import sys
-import time
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 URL = "https://kids.stoyanie.ru/tickets"
+HASH_FILE = "last_hash.txt"
 
 def send_telegram(msg):
     requests.post(
@@ -27,25 +27,53 @@ if r.status_code != 200:
 
 text = r.text.lower()
 
-idx_sold = text.find('распроданы')
-idx_tickets = text.find('входные билеты')
-
-print(f"'распроданы': {idx_sold}, 'входные билеты': {idx_tickets}")
-
-if idx_sold >= 0 and idx_tickets > idx_sold:
-    print("Билеты РАСПРОДАНЫ — молчим")
-    sys.exit(0)
-
 if 'архстояние' not in text:
     print("Страница загрузилась некорректно — пропускаем")
     sys.exit(0)
 
-print("БИЛЕТЫ ПОЯВИЛИСЬ — отправляем уведомление!")
-for _ in range(3):
-    send_telegram(
-        "🚨🎟 <b>БИЛЕТЫ ПОЯВИЛИСЬ!</b> 🎟🚨\n\n"
-        "Входные билеты на Архстояние Детское доступны прямо сейчас!\n\n"
-        "👉 <a href='https://kids.stoyanie.ru/tickets'>КУПИТЬ БИЛЕТ</a>\n\n"
-        "Не медли — раскупают быстро!"
-    )
-    time.sleep(5)
+# Вырезаем только блок статусов: от "в наличии" до "категории билетов"
+idx_start = text.find('в наличии')
+idx_end = text.find('категории билетов')
+if idx_start == -1 or idx_end == -1:
+    print("Не нашли блок статусов — пропускаем")
+    sys.exit(0)
+
+block = text[idx_start:idx_end]
+print(f"Блок статусов ({len(block)} символов):")
+print(block[:300])
+
+current_hash = hashlib.md5(block.encode()).hexdigest()
+print(f"Текущий хэш: {current_hash}")
+
+# Читаем предыдущий хэш
+try:
+    with open(HASH_FILE, 'r') as f:
+        last_hash = f.read().strip()
+    print(f"Предыдущий хэш: {last_hash}")
+except:
+    last_hash = None
+    print("Первый запуск — запоминаем состояние")
+
+# Сохраняем текущий хэш
+with open(HASH_FILE, 'w') as f:
+    f.write(current_hash)
+
+if last_hash is None or current_hash == last_hash:
+    print("Изменений нет — молчим")
+    sys.exit(0)
+
+# Изменения есть!
+print("ИЗМЕНЕНИЯ В БЛОКЕ СТАТУСОВ!")
+
+idx_sold = text.find('распроданы')
+idx_tickets = text.find('входные билеты')
+if idx_sold >= 0 and idx_tickets > idx_sold:
+    ticket_status = "⚠️ Входные билеты пока ещё распроданы, но что-то изменилось"
+else:
+    ticket_status = "🎟 ВХОДНЫЕ БИЛЕТЫ ПОЯВИЛИСЬ!"
+
+send_telegram(
+    f"🔔 <b>На сайте что-то изменилось!</b>\n\n"
+    f"{ticket_status}\n\n"
+    f"👉 <a href='https://kids.stoyanie.ru/tickets'>Проверить сайт</a>"
+)
