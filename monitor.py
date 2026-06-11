@@ -11,28 +11,29 @@ SID = "123102883"
 BASE = "https://mapi.afisha.ru/api/v21"
 
 print("=== Пробуем кандидатов ===")
-for u in [
-    f"{BASE}/sessions/{SID}/hall",
-    f"{BASE}/sessions/{SID}/halls",
-    f"{BASE}/sessions/{SID}/levels",
-    f"{BASE}/sessions/{SID}/scheme",
-    f"{BASE}/sessions/{SID}/plan",
-    f"{BASE}/sessions/{SID}/seats",
-    f"{BASE}/sessions/{SID}/seattypes",
-]:
+candidates = [
+    BASE + "/sessions/" + SID + "/hall",
+    BASE + "/sessions/" + SID + "/halls",
+    BASE + "/sessions/" + SID + "/levels",
+    BASE + "/sessions/" + SID + "/scheme",
+    BASE + "/sessions/" + SID + "/plan",
+    BASE + "/sessions/" + SID + "/seats",
+    BASE + "/sessions/" + SID + "/seattypes",
+]
+for u in candidates:
     try:
         r = requests.get(u, headers=H, timeout=15)
-        print(f"{u}\n  -> {r.status_code}: {r.text[:500]}\n")
+        print(u + "\n  -> " + str(r.status_code) + ": " + r.text[:500] + "\n")
     except Exception as e:
-        print(f"{u}\n  -> ERR {e}\n")
+        print(u + "\n  -> ERR " + str(e) + "\n")
 
 print("\n=== ВСЕ пути API в app.js ===")
 js = requests.get("https://www.afisha.ru/w/app.b2ae2665d8454d5e2b3c.js", headers=H, timeout=20).text
 paths = set()
-# Шаблоны вида "/xxx/".concat(...)
 for m in re.finditer(r'["\'`](/[a-zA-Z0-9/._-]{2,50})["\'`]\s*\)?\.concat', js):
     paths.add(m.group(1) + "{id}")
-# Просто строки путей
 for m in re.finditer(r'["\'`](/[a-zA-Z][a-zA-Z0-9/._-]{2,50})["\'`]', js):
     paths.add(m.group(1))
-for p in
+for p in sorted(paths):
+    if not p.startswith("/w/") and not p.startswith("/img") and not p.startswith("/css") and not p.startswith("/fonts"):
+        print(p)
