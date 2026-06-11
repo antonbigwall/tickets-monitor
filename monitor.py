@@ -9,36 +9,30 @@ H = {
 }
 KEY = "e0dff602-86e5-46e2-92f5-c21c3b0b8f1d"
 SID = "123102883"
+API = f"https://mapi.afisha.ru/api/v21/sessions/{SID}"
 
-candidates = [
-    f"https://mapi.afisha.ru/api/v21/session/{SID}",
-    f"https://mapi.afisha.ru/api/v21/sessions/{SID}",
-    f"https://mapi.afisha.ru/api/v21/session/{SID}/tickets",
-    f"https://mapi.afisha.ru/api/v21/sessions/{SID}/tickets",
-    f"https://mapi.afisha.ru/api/v21/session/{SID}?widgetKey={KEY}",
-    f"https://mapi.afisha.ru/api/v21/widget/session/{SID}?widgetKey={KEY}",
-]
+print("=== Пробуем с X-Application-Key = widget-key ===")
+r = requests.get(API, headers={**H, "X-Application-Key": KEY}, timeout=15)
+print(f"{r.status_code}: {r.text[:1500]}")
 
-print("=== Пробуем API endpoints ===")
-for u in candidates:
+print("\n=== Ищем ключ в app.js виджета ===")
+js = requests.get("https://www.afisha.ru/w/app.b2ae2665d8454d5e2b3c.js", headers=H, timeout=20).text
+print(f"app.js length: {len(js)}")
+
+for kw in ["X-Application-Key", "application-key", "applicationKey", "appKey"]:
+    for m in list(re.finditer(re.escape(kw), js, re.IGNORECASE))[:5]:
+        print(f"\n[{kw}]")
+        print(repr(js[max(0,m.start()-200):m.start()+300]))
+
+print("\n=== UUID-подобные строки в app.js (первые 20) ===")
+uuids = sorted(set(re.findall(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', js)))
+for u in uuids[:20]:
+    print(u)
+
+print("\n=== Пробуем найденные UUID как ключ ===")
+for u in uuids[:10]:
     try:
-        r = requests.get(u, headers=H, timeout=15)
-        print(f"\n{u}\n  -> {r.status_code}: {r.text[:400]}")
+        r = requests.get(API, headers={**H, "X-Application-Key": u}, timeout=15)
+        print(f"{u} -> {r.status_code}: {r.text[:200]}")
     except Exception as e:
-        print(f"\n{u}\n  -> ERROR: {e}")
-
-print("\n=== Страница виджета ===")
-for wu in [
-    f"https://www.afisha.ru/w/session/{SID}?widget-key={KEY}",
-    f"https://www.afisha.ru/w/session/{SID}",
-]:
-    try:
-        r = requests.get(wu, headers=H, timeout=15)
-        print(f"\n{wu}\n  -> {r.status_code}, длина {len(r.text)}")
-        if r.status_code == 200:
-            srcs = re.findall(r'src=["\']([^"\']+)["\']', r.text)
-            print("  Скрипты:", srcs[:15])
-            for m in list(re.finditer(r'v21', r.text))[:5]:
-                print("  ", repr(r.text[max(0,m.start()-150):m.start()+150]))
-    except Exception as e:
-        print(f"\n{wu}\n  -> ERROR: {e}")
+        print(f"{u} -> ERR {e}")
